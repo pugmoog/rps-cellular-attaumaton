@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>RPS Cellular Automata</title>
+
+<style>
+html, body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #111;
+    font-family: Arial, sans-serif;
+}
+
+/* =========================
+   LAYOUT
+========================= */
+
+#container {
+    display: flex;
+    width: 100vw;
+    height: 100vh;
+}
+
+/* SETTINGS PANEL */
+#settings {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 260px;
+    height: 100%;
+    background: rgba(20,20,20,0.85);
+    color: white;
+    padding: 12px;
+    box-sizing: border-box;
+
+    opacity: 0;
+    transform: translateX(-10px);
+    pointer-events: none;
+
+    transition: 0.25s ease;
+    overflow-y: auto;
+}
+
+#settings:hover {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
+}
+
+#hoverZone {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 10%;
+    height: 100%;
+}
+
+#hoverZone:hover + #settings {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
+}
+
+/* CANVAS */
+#canvas {
+    flex: 1;
+    display: block;
+    margin: 20px
+}
+
+label {
+    font-size: 12px;
+    display: block;
+    margin-top: 10px
+}
+
+input {
+    width: 100%;
+}
+
+button {
+    width: 100%;
+    margin-top: 10px;
+    padding: 6px;
+    background: #333;
+    color: white;
+    border: 1px solid #555;
+    cursor: pointer;
+}
+
+button:hover {
+    background: #444;
+}
+
+.valueRow {
+    display: flex;
+    gap: 6px;
+}
+
+.valueRow input[type="text"] {
+    width: 60px;
+}
+</style>
+</head>
+
+<body>
+
+<div id="container">
+
+    <div id="hoverZone"></div>
+
+    <div id="settings">
+        <h3>Settings</h3>
+
+        <label>FPS</label>
+        <div class="valueRow">
+            <input id="fpsRange" type="range" min="1" max="240" value="60">
+            <input id="fpsText" type="text" value="60">
+        </div>
+
+        <label>Mutation Rate</label>
+        <div class="valueRow">
+            <input id="mutRange" type="range" min="0" max="0.01" step="0.0001" value="0.000001">
+            <input id="mutText" type="text" value="0.000001">
+        </div>
+
+        <label>Grid Width</label>
+        <input id="widthText" type="text" value="220">
+
+        <label>Grid Height</label>
+        <input id="heightText" type="text" value="140">
+
+        <button id="applyBtn">Apply / Reset</button>
+        <button id="loadBtn">Load Locked PNG</button>
+        <input id="fileInput" type="file" accept="image/png" style="display:none">
+        <label style="bottom: 20px; position: fixed"><strong>ChatGPT made this, not me</strong></label>
+    </div>
+
+    <canvas id="canvas"></canvas>
+</div>
+
+<script>
+/* =========================
+   STATE
+========================= */
+
+let GRID_WIDTH = 220;
+let GRID_HEIGHT = 140;
+
+let FPS = 60;
+let MUTATION_RATE = 0.000001;
+
+const NUM_TYPES = 7;
+
+const COLORS = [
+    [255,80,80],
+    [70,130,255],
+    [60,200,80],
+    [180,180,190],
+    [140,100,60],
+    [255,230,60],
+    [170,240,255],
+];
+
+const BEATS = {};
+for (let i = 0; i < NUM_TYPES; i++) {
+    BEATS[i] = new Set([(i+1)%NUM_TYPES,(i+2)%NUM_TYPES,(i+4)%NUM_TYPES]);
+}
+
+let grid, locked;
+
+/* =========================
+   CANVAS
+========================= */
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+window.addEventListener("resize", resizeCanvas);
+resizeCanvas();
+
+/* =========================
+   GRID
+========================= */
+
+function resetGrid() {
+    grid = new Uint8Array(GRID_WIDTH * GRID_HEIGHT);
+    locked = new Uint8Array(GRID_WIDTH * GRID_HEIGHT);
+
+    for (let i = 0; i < grid.length; i++) {
+        grid[i] = 0;
+        locked[i] = 0;
+    }
+
+    // border locked
+    for (let x = 0; x < GRID_WIDTH; x++) {
+        locked[x] = 1;
+        locked[(GRID_HEIGHT-1)*GRID_WIDTH + x] = 1;
+    }
+    for (let y = 0; y < GRID_HEIGHT; y++) {
+        locked[y*GRID_WIDTH] = 1;
+        locked[y*GRID_WIDTH + GRID_WIDTH - 1] = 1;
+    }
+}
+
+resetGrid();
+
+/* =========================
+   UPDATE
+========================= */
+
+function update() {
+    const newGrid = grid.slice();
+
+    for (let i = 0; i < grid.length; i++) {
+        if (!locked[i] && Math.random() < MUTATION_RATE) {
+            newGrid[i] = (Math.random() * NUM_TYPES) | 0;
+        }
+    }
+
+    for (let i = 0; i < grid.length; i++) {
+        if (locked[i]) continue;
+
+        const attacker = grid[i];
+
+        for (let k = 0; k < 3; k++) {
+            const dir = (Math.random() * 4) | 0;
+            let j = i;
+
+            if (dir === 0 && i % GRID_WIDTH > 0) j--;
+            if (dir === 1 && i % GRID_WIDTH < GRID_WIDTH-1) j++;
+            if (dir === 2 && i >= GRID_WIDTH) j -= GRID_WIDTH;
+            if (dir === 3 && i < GRID_WIDTH*(GRID_HEIGHT-1)) j += GRID_WIDTH;
+
+            if (locked[j]) continue;
+
+            const defender = grid[j];
+            if (BEATS[attacker].has(defender)) {
+                newGrid[j] = attacker;
+            }
+        }
+    }
+
+    grid = newGrid;
+}
+
+/* =========================
+   DRAW (LETTERBOXED FIX)
+========================= */
+
+function draw() {
+    const img = ctx.createImageData(GRID_WIDTH, GRID_HEIGHT);
+    const data = img.data;
+
+    for (let i = 0; i < grid.length; i++) {
+        const p = i * 4;
+
+        if (locked[i]) {
+            data[p] = 0;
+            data[p+1] = 0;
+            data[p+2] = 0;
+        } else {
+            const c = COLORS[grid[i]];
+            data[p] = c[0];
+            data[p+1] = c[1];
+            data[p+2] = c[2];
+        }
+        data[p+3] = 255;
+    }
+
+    const temp = document.createElement("canvas");
+    temp.width = GRID_WIDTH;
+    temp.height = GRID_HEIGHT;
+
+    const tctx = temp.getContext("2d");
+    tctx.putImageData(img, 0, 0);
+
+    ctx.imageSmoothingEnabled = false;
+
+    // =========================
+    // SCALE-TO-FIT (IMPORTANT FIX)
+    // =========================
+
+    const sw = canvas.width;
+    const sh = canvas.height;
+
+    const scale = Math.min(sw / GRID_WIDTH, sh / GRID_HEIGHT);
+
+    const w = GRID_WIDTH * scale;
+    const h = GRID_HEIGHT * scale;
+
+    const ox = (sw - w) / 2;
+    const oy = (sh - h) / 2;
+
+    // background fill (letterbox bars)
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, sw, sh);
+
+    ctx.drawImage(temp, ox, oy, w, h);
+}
+
+/* =========================
+   LOOP
+========================= */
+
+let last = 0;
+function loop(t) {
+    requestAnimationFrame(loop);
+
+    const interval = 1000 / FPS;
+    if (t - last < interval) return;
+    last = t;
+
+    update();
+    draw();
+}
+requestAnimationFrame(loop);
+
+/* =========================
+   SETTINGS
+========================= */
+
+function bind(rangeId, textId, setter) {
+    const r = document.getElementById(rangeId);
+    const t = document.getElementById(textId);
+
+    r.oninput = () => {
+        t.value = r.value;
+        setter(parseFloat(r.value));
+    };
+
+    t.oninput = () => {
+        r.value = t.value;
+        setter(parseFloat(t.value));
+    };
+}
+
+bind("fpsRange", "fpsText", v => FPS = v);
+bind("mutRange", "mutText", v => MUTATION_RATE = v);
+
+/* =========================
+   APPLY
+========================= */
+
+document.getElementById("applyBtn").onclick = () => {
+    GRID_WIDTH = parseInt(document.getElementById("widthText").value);
+    GRID_HEIGHT = parseInt(document.getElementById("heightText").value);
+    resetGrid();
+};
+
+/* =========================
+   PNG LOADER
+========================= */
+
+document.getElementById("loadBtn").onclick = () => {
+    document.getElementById("fileInput").click();
+};
+
+document.getElementById("fileInput").onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const img = new Image();
+
+    img.onload = () => {
+        const c = document.createElement("canvas");
+        c.width = GRID_WIDTH;
+        c.height = GRID_HEIGHT;
+
+        const cctx = c.getContext("2d");
+        cctx.drawImage(img, 0, 0, GRID_WIDTH, GRID_HEIGHT);
+
+        const data = cctx.getImageData(0,0,GRID_WIDTH,GRID_HEIGHT).data;
+
+        for (let i = 0; i < grid.length; i++) {
+            const r = data[i*4];
+            const g = data[i*4+1];
+            const b = data[i*4+2];
+
+            locked[i] = ((r+g+b)/3 < 10) ? 1 : 0;
+            grid[i] = 0;
+        }
+    };
+
+    img.src = URL.createObjectURL(file);
+};
+</script>
+
+</body>
+</html>
