@@ -362,7 +362,7 @@ document.getElementById("loadBtn").onclick = () => {
     document.getElementById("fileInput").click();
 };
 
-document.getElementById("fileInput").onchange = (e) => {
+document.getElementById("fileInput").onclick = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
