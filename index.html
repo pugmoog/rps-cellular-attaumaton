@@ -35,33 +35,22 @@ html, body {
     padding: 12px;
     box-sizing: border-box;
 
-    opacity: 0;
-    transform: translateX(-10px);
-    pointer-events: none;
-
-    transition: 0.25s ease;
     overflow-y: auto;
+    display:none;
+}
+#settings.visible {
+    display: block;
 }
 
-#settings:hover {
-    opacity: 1;
-    transform: translateX(0);
-    pointer-events: auto;
-}
 
 #hoverZone {
     position: absolute;
-    left: 0;
+    right: 20px;
     top: 0;
-    width: 10%;
-    height: 100%;
+    width: 60px;
+    height: 30px;
 }
 
-#hoverZone:hover + #settings {
-    opacity: 1;
-    transform: translateX(0);
-    pointer-events: auto;
-}
 
 /* CANVAS */
 #canvas {
@@ -109,7 +98,7 @@ button:hover {
 
 <div id="container">
 
-    <div id="hoverZone"></div>
+    <button id="hoverZone" onclick="toggleSettings();">settings</button>
 
     <div id="settings">
         <h3>Settings</h3>
@@ -193,11 +182,6 @@ function resetGrid() {
     grid = new Uint8Array(GRID_WIDTH * GRID_HEIGHT);
     locked = new Uint8Array(GRID_WIDTH * GRID_HEIGHT);
 
-    for (let i = 0; i < grid.length; i++) {
-        grid[i] = 0;
-        locked[i] = 0;
-    }
-
     // border locked
     for (let x = 0; x < GRID_WIDTH; x++) {
         locked[x] = 1;
@@ -207,6 +191,11 @@ function resetGrid() {
         locked[y*GRID_WIDTH] = 1;
         locked[y*GRID_WIDTH + GRID_WIDTH - 1] = 1;
     }
+    for (let i = 0; i < grid.length; i++) {
+    if (!locked[i]) {
+        grid[i] = 0;
+    }
+}
 }
 
 resetGrid();
@@ -214,6 +203,12 @@ resetGrid();
 /* =========================
    UPDATE
 ========================= */
+function toggleSettings() {
+    let fff = document.getElementById('settings');
+    fff.classList.toggle('visible');
+}
+
+
 
 function update() {
     const newGrid = grid.slice();
@@ -348,10 +343,42 @@ bind("mutRange", "mutText", v => MUTATION_RATE = v);
    APPLY
 ========================= */
 
+let savedLocked = null;
+let savedWidth = GRID_WIDTH;
+let savedHeight = GRID_HEIGHT;
+
 document.getElementById("applyBtn").onclick = () => {
-    GRID_WIDTH = parseInt(document.getElementById("widthText").value);
-    GRID_HEIGHT = parseInt(document.getElementById("heightText").value);
-    resetGrid();
+    // Save the current state before resizing
+    savedLocked = locked.slice();
+    savedWidth = GRID_WIDTH;
+    savedHeight = GRID_HEIGHT;
+    
+    const newWidth = parseInt(document.getElementById("widthText").value);
+    const newHeight = parseInt(document.getElementById("heightText").value);
+    
+    GRID_WIDTH = newWidth;
+    GRID_HEIGHT = newHeight;
+    
+    // Create new grid with new dimensions
+    const newGrid = new Uint8Array(GRID_WIDTH * GRID_HEIGHT);
+    const newLocked = new Uint8Array(GRID_WIDTH * GRID_HEIGHT);
+    
+    // Scale and stretch the old locked pattern to fit new dimensions
+    for (let y = 0; y < GRID_HEIGHT; y++) {
+        for (let x = 0; x < GRID_WIDTH; x++) {
+            const oldX = Math.floor(x * savedWidth / GRID_WIDTH);
+            const oldY = Math.floor(y * savedHeight / GRID_HEIGHT);
+            const oldIdx = oldY * savedWidth + oldX;
+            const newIdx = y * GRID_WIDTH + x;
+            
+            if (oldIdx < savedLocked.length) {
+                newLocked[newIdx] = savedLocked[oldIdx];
+            }
+        }
+    }
+    
+    grid = newGrid;
+    locked = newLocked;
 };
 
 /* =========================
@@ -362,7 +389,7 @@ document.getElementById("loadBtn").onclick = () => {
     document.getElementById("fileInput").click();
 };
 
-document.getElementById("fileInput").onclick = (e) => {
+document.getElementById("fileInput").onchange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
@@ -390,6 +417,7 @@ document.getElementById("fileInput").onclick = (e) => {
 
     img.src = URL.createObjectURL(file);
 };
+
 </script>
 
 </body>
